@@ -371,9 +371,9 @@ for image in glob.glob(imagesPath):
     histQauntTime.append(float(quant_end - quant_start))
     
     mean_start = process_time()
-    meanSquaredQuantizationError(img, imageQuantizationLevel)
+    meanSquaredQuantizationError(img, count, imageQuantizationLevel)
     mean_end = process_time()
-    meanTime.append(float(mean_start - mean_end)) 
+    meanTime.append(float(mean_end - mean_start)) 
 
 print("*****Images Processed*****")
     
