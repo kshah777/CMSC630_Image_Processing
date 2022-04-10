@@ -45,28 +45,28 @@ numClusters = config["inputs"]["clusters"]
 global clusters
 clusters= [[] for i in range(int(numClusters))]
 
-# try:
-#     os.mkdir(outputPath)
-#     os.mkdir(outputPath + "/grayImages")
-#     os.mkdir(outputPath + "/colorSpecturm")
-#     os.mkdir(outputPath + "/medianFilter")
-#     os.mkdir(outputPath + "/linearFilter")
-#     os.mkdir(outputPath + "/saltNpeper")
-#     os.mkdir(outputPath + "/gaussian")
-#     os.mkdir(outputPath + "/histogram")
-#     os.mkdir(outputPath + "/histogramEqualizations")
-#     os.mkdir(outputPath + "/imageQuantization")
-#     os.mkdir(outputPath + "/sobelOperator")
-#     os.mkdir(outputPath + "/improvedSobel")
-#     os.mkdir(outputPath + "/prewittOperator")
-#     os.mkdir(outputPath + "/compassOperator")
-#     os.mkdir(outputPath + "/robertsOperator")
-#     os.mkdir(outputPath + "/imageErosion")
-#     os.mkdir(outputPath + "/imageDilation")
-#     os.mkdir(outputPath + "/histogramThreshold")
-#     os.mkdir(outputPath + "/kmeans")
-# except OSError as error:
-#     print(error)
+try:
+    os.mkdir(outputPath)
+    # os.mkdir(outputPath + "/grayImages")
+    # os.mkdir(outputPath + "/colorSpecturm")
+    # os.mkdir(outputPath + "/medianFilter")
+    # os.mkdir(outputPath + "/linearFilter")
+    # os.mkdir(outputPath + "/saltNpeper")
+    # os.mkdir(outputPath + "/gaussian")
+    # os.mkdir(outputPath + "/histogram")
+    # os.mkdir(outputPath + "/histogramEqualizations")
+    # os.mkdir(outputPath + "/imageQuantization")
+    os.mkdir(outputPath + "/sobelOperator")
+    os.mkdir(outputPath + "/improvedSobel")
+    os.mkdir(outputPath + "/prewittOperator")
+    os.mkdir(outputPath + "/compassOperator")
+    os.mkdir(outputPath + "/robertsOperator")
+    os.mkdir(outputPath + "/imageErosion")
+    os.mkdir(outputPath + "/imageDilation")
+    os.mkdir(outputPath + "/histogramThreshold")
+    os.mkdir(outputPath + "/kmeans")
+except OSError as error:
+    print(error)
 
 def writeToFile(path, count, image):
     if path == 1:
@@ -570,19 +570,21 @@ def histogramThreshold(image, count):
 def kmeans(img, count, numClusters):
     height = len(img)
     width = len(img[0])
-    centroids = random.sample(range(1, 257), int(numClusters))
+    centroid = random.sample(range(1, 257), int(numClusters))
+    # centroid = [136,34,56]
     blankImage = np.zeros((height, width), dtype=np.uint8)
     centroidList= []
 
-    while (centroids != centroidList):
+    while (centroid != centroidList):
         pixelMap = {}
         for x in range(height):
             for y in range(width):
                 distance = []
                 temp = pixelMap.get(img[x][y])
                 if (temp == None):
-                    for c in centroids:
-                        distance.append(math.sqrt((c-img[x][y])**2))
+                    for item in centroid:
+                        distance.append(math.sqrt((item - img[x][y])**2))
+                        # print{str(distance) + " " + str(img[x][y])}
                         variance = np.argmin(distance)
                         clusters[variance].append(img[x][y])
                         pixelMap[img[x][y]] = variance
@@ -592,17 +594,13 @@ def kmeans(img, count, numClusters):
                     clusters[pixelMap.get(img[x][y])].append(img[x][y])
                     blankImage[x][y] = pixelMap.get(img[x][y])
                 # print(str(blankImage[x][y]) + " " + str(img[x][y]) + " index: " + str(x) + " " + str(y))
-        centroidList = centroids.copy()
-        for index,cluster in enumerate(clusters):
-            if(len(cluster) !=0):
-                pixel=0
-                counter=len(cluster)
-                for x in range(len(cluster)):
-                    pixel+=cluster[x]
-                avg = pixel/counter
-                centroids[index]=int(avg)
+        centroidList = centroid.copy()
+        avgList = []
+        for i in range(len(clusters)):
+            avgList.append(int(np.sum(clusters[i])/len(clusters[i])))
+    # print(avgList)
 
-    centers = np.array(centroids)
+    centers = np.array(avgList)
     #print(labels)
     segImage = centers[blankImage]
     # cv2.imshow('image', segImage)
@@ -616,7 +614,7 @@ def compassOperator(img, count):
     height = len(img)
     width = len(img[0])
     blankImage = np.zeros((height, width), dtype=np.uint8)
-    lists = [np.zeros((height, width), dtype=np.uint8) for i in range(7)]
+    lists = []
     directions = np.array([
         [[-1.0, 0.0, 1.0],
         [-2.0, 0.0, 2.0],
@@ -652,18 +650,20 @@ def compassOperator(img, count):
     ])
 
     for filter in directions:
-        for x in lists:
-            for i in range(1, height-1):
-                for j in range(1, width-1):
-                        x[i][j] = int(np.sum(np.multiply(img[i-1:i+2, j-1:j+2], filter)))
-                        # print(str(x[i][j]) + " at index: " + str(i) + str(j))    
+        test = np.zeros((height, width), dtype=np.uint8)
+        for i in range(1, height-1):
+            for j in range(1, width-1):
+                    test[i][j] = int(np.sum(np.multiply(img[i-1:i+2, j-1:j+2], filter)))
+                    # print(str(x[i][j]) + " at index: " + str(i) + str(j)) 
+        lists.append(test)
+
     for x in lists:
         blankImage = np.maximum(x, blankImage)           
         # print("Done")
 
     finalImage = img
-    for v in range(0,height):
-        for u in range(0, width):
+    for u in range(1,height-1):
+        for v in range(1, width-1):
             finalImage[u][v] = math.pi/4 * blankImage[u][v]
     # cv2.imshow('image', finalImage)
     # cv2.waitKey(0)
@@ -782,7 +782,7 @@ for filename in os.listdir(imagesPath):
         kMeansTime.append(float(kMeans_end - kMeans_start))
 
         comp_start = process_time()
-        # compassOperator(img, count)
+        compassOperator(img, count)
         comp_end = process_time()
         compTime.append(float(comp_end - comp_start))
 
@@ -805,10 +805,10 @@ print("Average time for Sobel Operator: " + str(averageTime(sobelTime)) + " seco
 print("Average time for Improved Sobel Operator: " + str(averageTime(improvedTime)) + " seconds")
 print("Average time for Prewitt Operator: " + str(averageTime(prewittTime)) + " seconds")
 print("Average time for Roberts Operator: " + str(averageTime(robertsTime)) + " seconds")
-# print("Average time for Compass Operator: " + str(averageTime(compTime)) + " seconds")
+print("Average time for Compass Operator: " + str(averageTime(compTime)) + " seconds")
 print("Average time for image Erosion: " + str(averageTime(erosionTime)) + " seconds")
 print("Average time for image Dilation: " + str(averageTime(dilationTime)) + " seconds")
-print("Average time for Historgram Thresholding: " + str(averageTime(threshTime)) + " seconds")
+print("Average time for Histogram Thresholding: " + str(averageTime(threshTime)) + " seconds")
 print("Average time for K Means Segmentation: " + str(averageTime(kMeansTime)) + " seconds")
 print("Average time it took for the entire program: " + str(totalTime) + " seconds")
 print("*****Finished*****")
