@@ -49,6 +49,7 @@ erosionKernel = [float(num) for num in config["inputs"]["erosionKernel"].split("
 dilationKernel = [float(num) for num in config["inputs"]["dilationKernel"].split(",")]
 
 featuresFileCSV = config["inputs"]["featuresFileCSV"]
+kValue = config["inputs"]["kValue"]
 
 numClusters = config["inputs"]["clusters"]
 global clusters
@@ -809,7 +810,7 @@ def crossValidation(csvPath):
     data = data.round({'area': 3, 'perimeter': 3, 'mean': 3, 'median': 3, 'meanRGB': 3, 'roundness': 3, 'variance': 3, 'stdDiv': 3})
     testPercent = .90
     trainPercent = 1 - testPercent
-    cross = 10
+    cross = kValue
     labels = data.iloc[:,-1]
     temp = set(labels.values.tolist())
     result, probability, percent, trainData, testData = {},{},{},{},{}
@@ -1027,8 +1028,8 @@ crossTime = cross_end - cross_start
 program_end = process_time()
 totalTime = (program_end - program_start)
         
-# print("*****Images Processed*****")
-# print("Total number of images processed: " + str(count))
+print("*****Images Processed*****")
+print("Total number of images processed: " + str(count))
 # print("Average time it took to convert to grey scale images: " + str(averageTime(greyTime)) + " seconds")
 # print("Average time it took to convert to RGB images: " + str(averageTime(rgbTime)) + " seconds")
 # print("Average time it took to add Salt and Pepper noise: " + str(averageTime(sNpTime)) + " seconds")
@@ -1048,7 +1049,6 @@ totalTime = (program_end - program_start)
 # print("Average time for image Dilation: " + str(averageTime(dilationTime)) + " seconds")
 # print("Average time for Histogram Thresholding: " + str(averageTime(threshTime)) + " seconds")
 # print("Average time for K Means Segmentation: " + str(averageTime(kMeansTime)) + " seconds")
-
 print("Average time for Histogram Segmentation: " + str(averageTime(histSegTime)) + " seconds")
 print("Average time for Contours: " + str(averageTime(contTime)) + " seconds")
 print("Average time for Feature Collection: " + str(averageTime(featTime)) + " seconds")
