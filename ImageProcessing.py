@@ -1,5 +1,9 @@
 from ctypes import util
+from distutils import core
+import re
+from statistics import variance
 import cv2
+from cv2 import threshold
 import numpy as np
 import random
 from configparser import ConfigParser 
@@ -9,6 +13,9 @@ from time import process_time
 from matplotlib import pyplot as plt
 from operator import index, le
 import math
+import re
+import pandas as pd
+from sklearn.utils import shuffle
 
 program_start = process_time()
 
@@ -29,17 +36,19 @@ outputPath = config["config"]["outputPath"]
 
 # imageQuantizationLevel = config["inputs"]["imageQuantizationLevel"]
 
-sobelXdirection = [float(num) for num in config["inputs"]["sobelXdirection"].split(",")]
-sobelYdirection = [float(num) for num in config["inputs"]["sobelYdirection"].split(",")]
-improvedSobelXdirection = [float(num) for num in config["inputs"]["improvedSobelXdirection"].split(",")]
-improvedsobelYdirection = [float(num) for num in config["inputs"]["improvedsobelYdirection"].split(",")]
-prewittXdirection = [float(num) for num in config["inputs"]["prewittXdirection"].split(",")]
-prewittYdirection = [float(num) for num in config["inputs"]["prewittYdirection"].split(",")]
-robertsXdirection = [float(num) for num in config["inputs"]["robertsXdirection"].split(",")]
-robertsYdirection = [float(num) for num in config["inputs"]["robertsYdirection"].split(",")]
+# sobelXdirection = [float(num) for num in config["inputs"]["sobelXdirection"].split(",")]
+# sobelYdirection = [float(num) for num in config["inputs"]["sobelYdirection"].split(",")]
+# improvedSobelXdirection = [float(num) for num in config["inputs"]["improvedSobelXdirection"].split(",")]
+# improvedsobelYdirection = [float(num) for num in config["inputs"]["improvedsobelYdirection"].split(",")]
+# prewittXdirection = [float(num) for num in config["inputs"]["prewittXdirection"].split(",")]
+# prewittYdirection = [float(num) for num in config["inputs"]["prewittYdirection"].split(",")]
+# robertsXdirection = [float(num) for num in config["inputs"]["robertsXdirection"].split(",")]
+# robertsYdirection = [float(num) for num in config["inputs"]["robertsYdirection"].split(",")]
 
 erosionKernel = [float(num) for num in config["inputs"]["erosionKernel"].split(",")]
 dilationKernel = [float(num) for num in config["inputs"]["dilationKernel"].split(",")]
+
+featuresFileCSV = config["inputs"]["featuresFileCSV"]
 
 numClusters = config["inputs"]["clusters"]
 global clusters
@@ -56,15 +65,17 @@ try:
     # os.mkdir(outputPath + "/histogram")
     # os.mkdir(outputPath + "/histogramEqualizations")
     # os.mkdir(outputPath + "/imageQuantization")
-    os.mkdir(outputPath + "/sobelOperator")
-    os.mkdir(outputPath + "/improvedSobel")
-    os.mkdir(outputPath + "/prewittOperator")
-    os.mkdir(outputPath + "/compassOperator")
-    os.mkdir(outputPath + "/robertsOperator")
-    os.mkdir(outputPath + "/imageErosion")
-    os.mkdir(outputPath + "/imageDilation")
-    os.mkdir(outputPath + "/histogramThreshold")
-    os.mkdir(outputPath + "/kmeans")
+    # os.mkdir(outputPath + "/sobelOperator")
+    # os.mkdir(outputPath + "/improvedSobel")
+    # os.mkdir(outputPath + "/prewittOperator")
+    # os.mkdir(outputPath + "/compassOperator")
+    # os.mkdir(outputPath + "/robertsOperator")
+    # os.mkdir(outputPath + "/imageErosion")
+    # os.mkdir(outputPath + "/imageDilation")
+    # os.mkdir(outputPath + "/histogramThreshold")
+    # os.mkdir(outputPath + "/kmeans")
+    os.mkdir(outputPath + "/histogramSegmentation")
+    os.mkdir(outputPath + "/contours")
 except OSError as error:
     print(error)
 
@@ -105,6 +116,12 @@ def writeToFile(path, count, image):
         cv2.imwrite(filePath.join(outputPath + "/improvedSobel/", "image.jpg".split(".")[0]+str(count)+".jpg"), image)
     elif path == 21:
         cv2.imwrite(filePath.join(outputPath + "/compassOperator/", "image.jpg".split(".")[0]+str(count)+".jpg"), image)
+    elif path == 22:
+        cv2.imwrite(filePath.join(outputPath + "/histogramSegmentation/", "image.jpg".split(".")[0]+str(count)+".jpg"), image)
+    elif path == 23:
+        cv2.imwrite(filePath.join(outputPath + "/contours/", "image.jpg".split(".")[0]+str(count)+".jpg"), image)
+    elif path == 24:
+        cv2.imwrite(filePath.join(outputPath + "/hysteresis/", "image.jpg".split(".")[0]+str(count)+".jpg"), image)
     else:
         print("Path not found")
 
@@ -240,17 +257,23 @@ def linearFilter(img, count, filterSize, weights):
     # cv2.waitKey(0)
     writeToFile(6, count, blankImage)
 
-def imageHistogram(img, count):
+def imageHistogram(img, count, type=None):
     height = len(img)
     widht = len(img[0])
     hist = np.zeros(shape=(256), dtype=np.uint64)
-    greyImage = greyScaleImage2(img)
-    for i in range(height):
-        for j in range(widht):
-            hist[greyImage[i][j]] = hist[greyImage[i][j]]+1
-    plt.plot(hist)
     # plt.show()
-    writeToFile(9, count, hist)
+    if type == "return":
+        for i in range(height):
+            for j in range(widht):
+                hist[img[i][j]] = hist[img[i][j]]+1
+        return hist
+    else: 
+        greyImage = greyScaleImage2(img)
+        for i in range(height):
+            for j in range(widht):
+                hist[greyImage[i][j]] = hist[greyImage[i][j]]+1
+        plt.plot(hist)
+        writeToFile(9, count, hist)
     plt.close()
 
 def imageHistogramEqualization(img, count):
@@ -479,7 +502,8 @@ def imageErosion(img, kernel, count):
         img = blankImage.copy()
     # cv2.imshow('image', img)
     # cv2.waitKey(0)
-    writeToFile(16, count, img)    
+    # writeToFile(16, count, img)
+    return img    
 
 def imageDilation(img, kernel, count):
     height = len(img)
@@ -501,7 +525,8 @@ def imageDilation(img, kernel, count):
         img = blankImage.copy()
     # cv2.imshow('image', img)
     # cv2.waitKey(0)
-    writeToFile(17, count, img)    
+    # writeToFile(17, count, img)
+    return img    
 
 def histogramThreshold(image, count):
     height = len(image)
@@ -669,15 +694,207 @@ def compassOperator(img, count):
     # cv2.waitKey(0)
     writeToFile(21, count, finalImage)
 
+def histogramSegmentation(image, count):
+    image = greyScaleImage2(img)
+    height = len(image)
+    width = len(image[0])
+    bins = 256
+    hist, edges = np.histogram(image, bins)
+    list1, list2, list3, list4 = [],[],[],[]
+    for i in range(bins):
+        list1.append(hist[i]/hist.max())
+
+    list2 = edges[:-1]
+    list3 = edges[1:]
+    list4 = np.add(list2, list3)
+    quotients = []
+    for number in list4:
+        quotients.append(number / 2.)
+
+    weight1 = np.cumsum(list1)
+    # print(weight1)
+    weight2 = np.cumsum(list1[::-1])[::-1]
+    # print(weight2)
+
+    # Get the class means mu0(t)
+    mean1 = np.multiply(list1, quotients)
+    mean1 = np.cumsum(mean1)
+    mean1 = mean1/weight1
+    # print(mean1)
+
+    mean2 = np.multiply(list1, quotients)
+    mean2 = mean2[::-1]
+    mean2 = np.cumsum(mean2)
+    mean2 = mean2/weight2[::-1]
+    mean2 = mean2[::-1]
+    # print(mean2)
+
+    list5, list6, list7, list8 = [],[],[],[]
+    x = len(weight1)
+    for i in range(x-1):
+        list5.append(weight1[i])
+    for i in range(1, x):
+        list6.append(weight2[i])
+    for i in range(x-1):
+        list7.append(mean1[i])
+    for i in range(1, x):
+        list8.append(mean2[i])
+
+    avg = np.subtract(list7, list8)
+    avg = avg ** 2
+    variance = np.multiply(list5, list6)
+    variance = np.multiply(variance, avg)
+    maxIndex = np.argmax(variance)
+    t = quotients[maxIndex]
+
+    global finalThreshold
+    finalThreshold = t
+    global finalVariance
+    finalVariance = np.sum(variance)/256
+    global finalMean
+    finalMean = int(avg.max())/256
+
+    blankImage = np.zeros((height, width), image.dtype)
+    for i in range(height):
+        for j in range(width): 
+            if(image[i,j] <= t):
+                blankImage[i,j] = image[i,j]
+            else:
+                blankImage[i,j] = 0
+    # cv2.imshow('image', blankImage)
+    # cv2.waitKey(0)
+    writeToFile(22, count, blankImage)
+    binaryImage = np.zeros((height, width), image.dtype)
+    for i in range(height):
+        for j in range(width): 
+                if(image[i,j] <= t):
+                    binaryImage[i,j] = 255
+                else:
+                    binaryImage[i,j] = 0
+    return binaryImage, blankImage
+
+def contourImage(img, count):
+    errosionImage = imageErosion(img, erosionKernel, count)
+    dilationImage = imageDilation(errosionImage, dilationKernel, count)
+    contour = np.subtract(dilationImage, errosionImage)
+    # cv2.imshow('image', contour)
+    # cv2.waitKey(0)
+    # writeToFile(23, count, contour)
+    return contour
+
+def featuresCollection(img, count, contour, binary, image):
+    hist = imageHistogram(img, count, "return")
+    values = list()
+    for index,value in enumerate(hist):
+        if index<=finalThreshold and index != 0:
+            values.extend([index]*value)
+    median = np.median(values)
+    stdDiv = math.sqrt(finalVariance)
+    mean = finalMean
+    variance = finalVariance
+    perimeter = np.count_nonzero(contour == 255)
+    area = np.count_nonzero(binary == 255)
+    roundness = (perimeter*perimeter)/(4*math.pi*area)
+    avgR = np.mean(image[:,:,2])
+    avgG = np.mean(image[:,:,1])
+    avgB = np.mean(image[:,:,0])
+    meanRGB = (avgR + avgG + avgB)/3    
+    f = open(os.path.join(outputPath+'/'+ featuresFileCSV), "a")
+    f.writelines([str(area),str(","),str(perimeter),str(","),str(mean),str(","),str(median),str(","),str(meanRGB),str(","),str(roundness),str(","),str(variance),str(","),str(stdDiv),str(","),label,str("\n")])
+    f.close()
+
+def crossValidation(csvPath):
+    accuracies = []
+    data = shuffle(pd.read_csv(csvPath))
+    data = data.round({'area': 3, 'perimeter': 3, 'mean': 3, 'median': 3, 'meanRGB': 3, 'roundness': 3, 'variance': 3, 'stdDiv': 3})
+    testPercent = .90
+    trainPercent = 1 - testPercent
+    cross = 10
+    labels = data.iloc[:,-1]
+    temp = set(labels.values.tolist())
+    result, probability, percent, trainData, testData = {},{},{},{},{}
+    for i in temp:
+        result[i]=labels.values.tolist().count(i)
+    for i in result:
+        probability[i] = result[i]/len(labels.values.tolist())
+        percent[i] = round(trainPercent * result[i])
+    size = data.shape[0]
+    listSize = int(size/cross)
+    list1 = list()
+    for j in range(0,cross): 
+        if(j < cross - 1):
+            x1 = j * listSize
+            y1 = (j + 1) * listSize
+            testData[j] = data.iloc[x1:y1]
+            list1.append(data.iloc[:x1])
+            list1.append(data.iloc[y1:])
+            trainData[j] = pd.concat(list1)
+            list1.clear()
+        else:
+            x1 = j * listSize
+            testData[j] = data.iloc[x1:]
+            trainData[j] = data.iloc[:x1]
+    labels, trainingData, testingData = list(), list(), list()
+    for i in range(0,cross):
+        for j in range(0,cross):
+            labels = trainData[j].iloc[:,-1:].values.tolist()
+            testingData = testData[i].iloc[:,:-1].values.tolist()
+            trainingData = trainData[j].values.tolist()
+            accs = knn(trainingData, testingData, labels)
+            accuracies.append(accs)
+    accuracies = [accuracies[i:i + cross] for i in range(0, len(accuracies), cross)]
+    for i in range(0,cross):
+        for j in range(0,cross):
+            print(f"fold = {j+1}: k = {i+1}, Accuracy = {(accuracies[i][j])}")
+    for i in range(len(accuracies)):
+        total = np.sum(accuracies[i])
+        print(f"k = {i+1}, Average Accuracy = {(total/cross)}")
+
+def knn(trainingData, testingData, labels):
+    distances = list()
+    test = {}
+    list1, list2, list3 = [], [], []
+    length = len(testingData)
+    length2 = len(trainingData)
+    for i in range(0, length2):
+        for j in range(0, length):
+            distance = 0
+            x = trainingData[i]
+            y = testingData[j]
+            for k in range(0,7):
+                r = x[k]
+                t = y[k]
+                distance += np.power(r - t, 2)
+        distances.append([x[-1], math.sqrt(distance)])
+    distances = sorted(distances, key=lambda a: a[1])
+    for i in range(len(distances)):
+        list1.append(distances[i][0])
+    for i in range(len(labels)):
+        list2.append(labels[i][0])
+    count = 0
+    # temp = set(list1)
+    # for i in temp:
+    #     list2.append([i, list1.count(i)])
+    # list2 = sorted(list2, key=lambda a: a[1])
+    # foo = list2[len(list2)-1][0]
+    # return accs 
+    for x in range(len(list2)):
+        if list2[x] == list1[x]:
+            count += 1
+    return round((count/float(len(list2))) * 100.0, 3)
+
 # greyTime, rgbTime, sNpTime, gaussTime, medianTime = [],[],[],[],[]
 # linearTime, histogramTime, histEqualTime, histQauntTime, meanTime = [],[],[],[],[]
-sobelTime, prewittTime, robertsTime, erosionTime, dilationTime = [],[],[],[],[]
-threshTime, kMeansTime, improvedTime, compTime = [],[],[],[]
-
+# sobelTime, prewittTime, robertsTime, erosionTime, dilationTime = [],[],[],[],[]
+# threshTime, kMeansTime, improvedTime, compTime = [],[],[],[]
+histSegTime, contTime, featTime, hystTime = [],[],[],[]
 totalTime = 0
 count = 0
 
 print("*****Starting*****")
+f = open(os.path.join(outputPath +'/'+ featuresFileCSV), "w")
+f.writelines(["area",str(","),"perimeter",str(","),"mean",str(","),"median",str(","),"meanRGB",str(","),"roundness",str(","),"variance",str(","),"stdDiv",str(","),"label",str("\n")])
+f.close()
 
 for filename in os.listdir(imagesPath):
     img = cv2.imread(os.path.join(imagesPath, filename))
@@ -685,6 +902,9 @@ for filename in os.listdir(imagesPath):
         print("No Images found in this Folder")
         print("*****Finished*****")
     else:
+        global label
+        label = re.split('\d+', filename)
+        label = label[0]
         count = count + 1
         print("Processing image number: " + str(count))
         
@@ -738,59 +958,77 @@ for filename in os.listdir(imagesPath):
         # mean_end = process_time()
         # meanTime.append(float(mean_end - mean_start)) 
 
-        img = cv2.imread(os.path.join(imagesPath, filename), 0)
-        (thresh, binary) = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
+        # sobel_start = process_time()
+        # sobelOperator(img, sobelXdirection, sobelYdirection, count)
+        # sobel_end = process_time()
+        # sobelTime.append(float(sobel_end - sobel_start)) 
 
-        sobel_start = process_time()
-        sobelOperator(img, sobelXdirection, sobelYdirection, count)
-        sobel_end = process_time()
-        sobelTime.append(float(sobel_end - sobel_start)) 
+        # improved_start = process_time()
+        # improvedSobelOperator(img, improvedSobelXdirection, improvedsobelYdirection, count)
+        # improved_end = process_time()
+        # improvedTime.append(float(improved_end - improved_start)) 
 
-        improved_start = process_time()
-        improvedSobelOperator(img, improvedSobelXdirection, improvedsobelYdirection, count)
-        improved_end = process_time()
-        improvedTime.append(float(improved_end - improved_start)) 
+        # prewitt_start = process_time()
+        # prewittOperator(img, prewittXdirection, prewittYdirection, count)
+        # prewitt_end = process_time()
+        # prewittTime.append(float(prewitt_end - prewitt_start)) 
 
-        prewitt_start = process_time()
-        prewittOperator(img, prewittXdirection, prewittYdirection, count)
-        prewitt_end = process_time()
-        prewittTime.append(float(prewitt_end - prewitt_start)) 
+        # roberts_start = process_time()
+        # robertsOperator(img, robertsXdirection, robertsYdirection, count)
+        # roberts_end = process_time()
+        # robertsTime.append(float(roberts_end - roberts_start)) 
 
-        roberts_start = process_time()
-        robertsOperator(img, robertsXdirection, robertsYdirection, count)
-        roberts_end = process_time()
-        robertsTime.append(float(roberts_end - roberts_start)) 
+        # erosion_start = process_time()
+        # imageErosion(binary, erosionKernel, count)
+        # erosion_end = process_time()
+        # erosionTime.append(float(erosion_end - erosion_start)) 
 
-        erosion_start = process_time()
-        imageErosion(binary, erosionKernel, count)
-        erosion_end = process_time()
-        erosionTime.append(float(erosion_end - erosion_start)) 
+        # dilation_start = process_time()
+        # imageDilation(binary, dilationKernel, count)
+        # dilation_end = process_time()
+        # dilationTime.append(float(dilation_end - dilation_start)) 
 
-        dilation_start = process_time()
-        imageDilation(binary, dilationKernel, count)
-        dilation_end = process_time()
-        dilationTime.append(float(dilation_end - dilation_start)) 
+        # thresh_start = process_time()
+        # histogramThreshold(img, count)  
+        # thresh_end = process_time()
+        # threshTime.append(float(thresh_end - thresh_start)) 
 
-        thresh_start = process_time()
-        histogramThreshold(img, count)  
-        thresh_end = process_time()
-        threshTime.append(float(thresh_end - thresh_start)) 
+        # kMeans_start = process_time()
+        # kmeans(img, count, numClusters)
+        # kMeans_end = process_time()
+        # kMeansTime.append(float(kMeans_end - kMeans_start))
 
-        kMeans_start = process_time()
-        kmeans(img, count, numClusters)
-        kMeans_end = process_time()
-        kMeansTime.append(float(kMeans_end - kMeans_start))
+        # comp_start = process_time()
+        # compassOperator(img, count)
+        # comp_end = process_time()
+        # compTime.append(float(comp_end - comp_start))
 
-        comp_start = process_time()
-        compassOperator(img, count)
-        comp_end = process_time()
-        compTime.append(float(comp_end - comp_start))
+        histSeg_start = process_time()
+        binaryHistorgram, histSegmentatedImage = histogramSegmentation(img, count)
+        histSeg_end = process_time()
+        histSegTime.append(float(histSeg_end - histSeg_start)) 
 
-        program_end = process_time()
-        totalTime = (program_end - program_start)
+        cont_start = process_time()
+        contour = contourImage(binaryHistorgram, count)
+        cont_end = process_time()
+        contTime.append(float(cont_end - cont_start)) 
+
+        feat_start = process_time()
+        featuresCollection(histSegmentatedImage, count, contour, binaryHistorgram, img)
+        feat_end = process_time()
+        featTime.append(float(feat_end - feat_start)) 
+
+print("*****Image Classification*****")
+cross_start = process_time()
+crossValidation(outputPath +'/'+ featuresFileCSV)
+cross_end = process_time()
+crossTime = cross_end - cross_start 
+
+program_end = process_time()
+totalTime = (program_end - program_start)
         
-print("*****Images Processed*****")
-print("Total number of images processed: " + str(count))
+# print("*****Images Processed*****")
+# print("Total number of images processed: " + str(count))
 # print("Average time it took to convert to grey scale images: " + str(averageTime(greyTime)) + " seconds")
 # print("Average time it took to convert to RGB images: " + str(averageTime(rgbTime)) + " seconds")
 # print("Average time it took to add Salt and Pepper noise: " + str(averageTime(sNpTime)) + " seconds")
@@ -801,14 +1039,19 @@ print("Total number of images processed: " + str(count))
 # print("Average time for Histogram Equalization: " + str(averageTime(histEqualTime)) + " seconds")
 # print("Average time for Historgram Quantization: " + str(averageTime(histQauntTime)) + " seconds")
 # print("Average time for MSQE: " + str(averageTime(meanTime)) + " seconds")
-print("Average time for Sobel Operator: " + str(averageTime(sobelTime)) + " seconds")
-print("Average time for Improved Sobel Operator: " + str(averageTime(improvedTime)) + " seconds")
-print("Average time for Prewitt Operator: " + str(averageTime(prewittTime)) + " seconds")
-print("Average time for Roberts Operator: " + str(averageTime(robertsTime)) + " seconds")
-print("Average time for Compass Operator: " + str(averageTime(compTime)) + " seconds")
-print("Average time for image Erosion: " + str(averageTime(erosionTime)) + " seconds")
-print("Average time for image Dilation: " + str(averageTime(dilationTime)) + " seconds")
-print("Average time for Histogram Thresholding: " + str(averageTime(threshTime)) + " seconds")
-print("Average time for K Means Segmentation: " + str(averageTime(kMeansTime)) + " seconds")
+# print("Average time for Sobel Operator: " + str(averageTime(sobelTime)) + " seconds")
+# print("Average time for Improved Sobel Operator: " + str(averageTime(improvedTime)) + " seconds")
+# print("Average time for Prewitt Operator: " + str(averageTime(prewittTime)) + " seconds")
+# print("Average time for Roberts Operator: " + str(averageTime(robertsTime)) + " seconds")
+# print("Average time for Compass Operator: " + str(averageTime(compTime)) + " seconds")
+# print("Average time for image Erosion: " + str(averageTime(erosionTime)) + " seconds")
+# print("Average time for image Dilation: " + str(averageTime(dilationTime)) + " seconds")
+# print("Average time for Histogram Thresholding: " + str(averageTime(threshTime)) + " seconds")
+# print("Average time for K Means Segmentation: " + str(averageTime(kMeansTime)) + " seconds")
+
+print("Average time for Histogram Segmentation: " + str(averageTime(histSegTime)) + " seconds")
+print("Average time for Contours: " + str(averageTime(contTime)) + " seconds")
+print("Average time for Feature Collection: " + str(averageTime(featTime)) + " seconds")
+print("Average time for Cross Validation and KNN: " + str(crossTime) + " seconds")
 print("Average time it took for the entire program: " + str(totalTime) + " seconds")
 print("*****Finished*****")
